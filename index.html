@@ -17,14 +17,14 @@
 </head>
 <body>
 <div class="app">
-  <div class="top"><div class="brand"><div class="logo">R</div><div><div class="title">Robinhood Chain Radar</div><div class="sub">New launches • 12-hour opportunity scanner</div></div></div><div class="live"><span class="dot"></span><span id="status">Connecting to Robinhood Chain data…</span></div></div>
+  <div class="top"><div class="brand"><div class="logo">R</div><div><div class="title">Robinhood Chain Radar</div><div class="sub">Robinhood Chain only • tokens with more than 100 holders</div></div></div><div class="live"><span class="dot"></span><span id="status">Connecting to Robinhood Chain data…</span></div></div>
   <div class="tabs"><button class="tab on" data-view="launches">New 12H Launches</button><button class="tab" data-view="portfolio">My Holdings</button></div>
   <section id="launchesView">
-    <div class="hero"><div class="metric"><div class="k">Scanner</div><div class="v">Robinhood only</div><div class="sm">GeckoTerminal + Blockscout</div></div><div class="metric"><div class="k">Pools found</div><div class="v" id="poolCount">—</div><div class="sm">created within 12 hours</div></div><div class="metric"><div class="k">Best mover</div><div class="v" id="bestMover">—</div><div class="sm" id="bestMoverSub">first-seen tracking</div></div><div class="metric"><div class="k">Most liquid</div><div class="v" id="mostLiquid">—</div><div class="sm" id="mostLiquidSub">—</div></div></div>
+    <div class="hero"><div class="metric"><div class="k">Scanner</div><div class="v">Robinhood only</div><div class="sm">100+ holder qualification</div></div><div class="metric"><div class="k">Qualified pools</div><div class="v" id="poolCount">—</div><div class="sm">12h launches with >100 holders</div></div><div class="metric"><div class="k">Best mover</div><div class="v" id="bestMover">—</div><div class="sm" id="bestMoverSub">first-seen tracking</div></div><div class="metric"><div class="k">Most liquid</div><div class="v" id="mostLiquid">—</div><div class="sm" id="mostLiquidSub">—</div></div></div>
     <div class="toolbar"><button class="btn primary" id="scan">↻ Scan now</button><select class="select" id="liq"><option value="0">All liquidity</option><option value="1000">$1K+ liquidity</option><option value="10000">$10K+ liquidity</option><option value="50000">$50K+ liquidity</option></select><select class="select" id="sort"><option value="new">Newest</option><option value="gain">Top gain</option><option value="holders">Most holders</option><option value="liq">Liquidity</option><option value="vol">Volume</option></select><input class="search" id="search" placeholder="Search token…"><span class="btn" id="updated">Last scan —</span></div>
     <div id="err" class="alert"></div>
     <div class="wrap"><table><thead><tr><th>Token</th><th>Age</th><th>First seen price</th><th>Current price</th><th>Move</th><th>Holders</th><th>Liquidity</th><th>24h volume</th><th>6h</th><th>24h</th><th>Token contract</th></tr></thead><tbody id="launchRows"></tbody></table></div>
-    <div class="note">Holder count is read live from the Robinhood Chain mainnet Blockscout explorer. Tap Copy beside any token to copy its contract address. “First seen price” is the price when this radar first observes the pool on this browser, not necessarily the exact launch transaction price.</div>
+    <div class="note">Only Robinhood Chain tokens with a verified holder count above 100 are displayed. Holder count is read live from the Robinhood Chain mainnet Blockscout explorer. Tokens remain hidden until holder verification completes.</div>
   </section>
   <section id="portfolioView">
     <div class="hero"><div class="metric"><div class="k">Watch mode</div><div class="v">2× · 4× · 5× · 10×</div><div class="sm">From your saved baselines</div></div><div class="metric"><div class="k">Baseline value</div><div class="v" id="baselineValue">—</div><div class="sm">holdings × baseline</div></div><div class="metric"><div class="k">Live portfolio</div><div class="v" id="liveValue">—</div><div class="sm" id="portfolioPnl">Waiting</div></div><div class="metric"><div class="k">Closest milestone</div><div class="v" id="closest">—</div><div class="sm" id="closestSub">—</div></div></div>
@@ -67,7 +67,7 @@ async function loadHolderCounts(items){
   await Promise.all(Array.from({length:Math.min(6,queue.length)},worker));
 }
 async function scan(){
-  let er=document.getElementById('err');er.style.display='none';document.getElementById('status').textContent='Scanning new Robinhood pools…';
+  let er=document.getElementById('err');er.style.display='none';document.getElementById('status').textContent='Scanning Robinhood Chain + holder counts…';
   try{
     let all=[];
     for(let page=1;page<=3;page++){
@@ -81,24 +81,24 @@ async function scan(){
       });
     }
     let ded={};all.forEach(x=>{if(!ded[x.id])ded[x.id]=x});launches=Object.values(ded);renderLaunches();
-    document.getElementById('status').textContent='Robinhood Chain live';
     document.getElementById('updated').textContent='Scanned '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-    loadHolderCounts(launches);
+    await loadHolderCounts(launches);
+    document.getElementById('status').textContent='Robinhood Chain live • >100 holders only';
   }catch(e){document.getElementById('status').textContent='Scanner unavailable';er.textContent=e.message+' — retry shortly if the public API is rate-limited.';er.style.display='block'}
 }
 function renderLaunches(){
   let q=document.getElementById('search').value.toLowerCase(),min=+document.getElementById('liq').value,sort=document.getElementById('sort').value;
-  let arr=launches.filter(x=>x.liq>=min&&(x.name.toLowerCase().includes(q)||x.sym.toLowerCase().includes(q)||x.contract.toLowerCase().includes(q)));
+  let arr=launches.filter(x=>x.holders>100&&x.liq>=min&&(x.name.toLowerCase().includes(q)||x.sym.toLowerCase().includes(q)||x.contract.toLowerCase().includes(q)));
   arr.forEach(x=>x.mult=x.entry?x.price/x.entry:1);
-  if(sort==='gain')arr.sort((a,b)=>b.mult-a.mult);else if(sort==='holders')arr.sort((a,b)=>(b.holders??-1)-(a.holders??-1));else if(sort==='liq')arr.sort((a,b)=>b.liq-a.liq);else if(sort==='vol')arr.sort((a,b)=>b.vol-a.vol);else arr.sort((a,b)=>new Date(b.created)-new Date(a.created));
+  if(sort==='gain')arr.sort((a,b)=>b.mult-a.mult);else if(sort==='holders')arr.sort((a,b)=>b.holders-a.holders);else if(sort==='liq')arr.sort((a,b)=>b.liq-a.liq);else if(sort==='vol')arr.sort((a,b)=>b.vol-a.vol);else arr.sort((a,b)=>new Date(b.created)-new Date(a.created));
   document.getElementById('poolCount').textContent=arr.length;
   let best=[...arr].sort((a,b)=>b.mult-a.mult)[0],liq=[...arr].sort((a,b)=>b.liq-a.liq)[0];
   document.getElementById('bestMover').textContent=best?best.mult.toFixed(2)+'×':'—';document.getElementById('bestMoverSub').textContent=best?best.sym+' • '+money(best.price):'first-seen tracking';document.getElementById('mostLiquid').textContent=liq?compact(liq.liq):'—';document.getElementById('mostLiquidSub').textContent=liq?liq.sym:'—';
   let b=document.getElementById('launchRows');
-  if(!arr.length){b.innerHTML='<tr><td colspan="11" class="empty">No matching Robinhood pools in the captured 12-hour window.</td></tr>';return}
+  if(!arr.length){let checking=launches.some(x=>x.holders==null);b.innerHTML=`<tr><td colspan="11" class="empty">${checking?'Checking holder counts… only tokens above 100 holders will appear.':'No Robinhood Chain tokens above 100 holders match the current 12-hour window.'}</td></tr>`;return}
   b.innerHTML=arr.map(x=>{
     let move=(x.mult-1)*100,hot=x.mult>=2,short=x.contract?x.contract.slice(0,6)+'…'+x.contract.slice(-4):'—';
-    return `<tr><td><div class="coin"><div class="ico">${(x.sym||'?')[0]}</div><div><div class="nm">${x.name}</div><div class="tk">${x.sym}${x.quote?' / '+x.quote:''}</div></div></div></td><td class="age">${age(x.created)}</td><td class="price">${money(x.entry)}</td><td class="price">${money(x.price)}</td><td><span class="badge ${hot?'hot':''}">${x.mult.toFixed(2)}×</span><div class="sm ${move>=0?'green':'red'}">${move>=0?'+':''}${move.toFixed(1)}%</div></td><td class="holders ${x.holders==null?'loading':''}">${x.holders==null?'…':count(x.holders)}</td><td class="price">${compact(x.liq)}</td><td class="price">${compact(x.vol)}</td><td class="${x.p6>=0?'green':'red'}">${x.p6>=0?'+':''}${x.p6.toFixed(1)}%</td><td class="${x.p24>=0?'green':'red'}">${x.p24>=0?'+':''}${x.p24.toFixed(1)}%</td><td><div class="contract"><span class="contractText">${short}</span>${x.contract?`<button class="copyBtn" onclick="copyContract('${x.contract}',this)">Copy</button>`:''}</div></td></tr>`;
+    return `<tr><td><div class="coin"><div class="ico">${(x.sym||'?')[0]}</div><div><div class="nm">${x.name}</div><div class="tk">${x.sym}${x.quote?' / '+x.quote:''}</div></div></div></td><td class="age">${age(x.created)}</td><td class="price">${money(x.entry)}</td><td class="price">${money(x.price)}</td><td><span class="badge ${hot?'hot':''}">${x.mult.toFixed(2)}×</span><div class="sm ${move>=0?'green':'red'}">${move>=0?'+':''}${move.toFixed(1)}%</div></td><td class="holders">${count(x.holders)}</td><td class="price">${compact(x.liq)}</td><td class="price">${compact(x.vol)}</td><td class="${x.p6>=0?'green':'red'}">${x.p6>=0?'+':''}${x.p6.toFixed(1)}%</td><td class="${x.p24>=0?'green':'red'}">${x.p24>=0?'+':''}${x.p24.toFixed(1)}%</td><td><div class="contract"><span class="contractText">${short}</span>${x.contract?`<button class="copyBtn" onclick="copyContract('${x.contract}',this)">Copy</button>`:''}</div></td></tr>`;
   }).join('');
 }
 async function loadPortfolio(){try{let ids='pons,cash-cat,prologue';let r=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);if(r.ok)Object.assign(portfolioCache,await r.json())}catch(e){}renderPortfolio()}
